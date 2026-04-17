@@ -100,9 +100,8 @@ variable "springboot_instance_type" {
   default     = "t3.micro"
 }
 
-# 신규 추가
 variable "haproxy_ami_id" {
-  description = "HAProxy 임시 AMI ID"
+  description = "HAProxy AMI ID"
   type        = string
 }
 

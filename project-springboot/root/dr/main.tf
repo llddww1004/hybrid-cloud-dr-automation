@@ -2,7 +2,7 @@
 # Provider & Terraform 설정
 ############################
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = "= 1.14.8"
 
   required_providers {
     aws = {
@@ -102,8 +102,7 @@ module "compute" {
   springboot_ami_id        = var.springboot_ami_id
   springboot_instance_type = var.springboot_instance_type
 
-  # 신규 추가
-  haproxy_ami_id           = var.haproxy_ami_id
+  haproxy_ami_id           = data.aws_ami.amazon_linux_2023.id
   tailscale_auth_key       = var.tailscale_auth_key
 
   bastion_ami_id           = data.aws_ami.amazon_linux_2023.id
@@ -114,7 +113,7 @@ module "compute" {
   asg_min_size             = var.asg_min_size
   asg_max_size             = var.asg_max_size
 
-  db_ec2_ami_id            = var.db_ec2_ami_id
+  db_ec2_ami_id            = data.aws_ami.amazon_linux_2023.id
   db_ec2_subnet_id         = module.networking.db_ec2_subnet_id
   db_ec2_sg_id             = module.networking.db_ec2_sg_id
 

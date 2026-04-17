@@ -6,7 +6,6 @@
 
 # 신규 추가
 dr_mode        = false
-haproxy_ami_id = "ami-0e79f7f968b97fdf0"
 
 # app_ami_id → springboot_ami_id
 springboot_ami_id        = "ami-0c8697730316c257b"

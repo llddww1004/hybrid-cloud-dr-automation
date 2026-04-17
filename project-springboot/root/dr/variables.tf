@@ -131,14 +131,6 @@ variable "asg_max_size" {
 }
 
 ############################
-# 신규 추가: HAProxy
-############################
-variable "haproxy_ami_id" {
-  description = "HAProxy 임시 AMI ID"
-  type        = string
-}
-
-############################
 # Bastion / Jenkins EC2
 ############################
 variable "bastion_instance_type" {
@@ -192,7 +184,3 @@ variable "db_ec2_subnet_cidr" {
   default     = "10.0.61.0/24"
 }
 
-variable "db_ec2_ami_id" {
-  description = "DB EC2 AMI ID"
-  type        = string
-}
