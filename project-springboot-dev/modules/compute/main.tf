@@ -177,7 +177,7 @@ frontend http_front
 backend onprem_back
     balance roundrobin
     option  httpchk GET /
-    server  onprem 100.116.211.56:80 check
+    server  onprem 100.79.94.82:80 check
 HAPROXY
 systemctl enable haproxy
 systemctl restart haproxy
