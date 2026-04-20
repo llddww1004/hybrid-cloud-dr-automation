@@ -254,16 +254,20 @@ resource "aws_instance" "db_ec2" {
   user_data = <<-EOF
 #!/bin/bash
 dnf update -y
-dnf install -y mysql-server
+rpm -Uvh https://dev.mysql.com/get/mysql80-community-release-el9-1.noarch.rpm
+dnf install -y mysql-community-server --nogpgcheck
 systemctl enable mysqld
 systemctl start mysqld
+sleep 10
+TEMP_PASS=$(grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}')
+mysql -u root -p"$TEMP_PASS" --connect-expired-password -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}';"
 curl -fsSL https://tailscale.com/install.sh | sh
 echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf
 sysctl -p
 tailscale up --authkey=${var.tailscale_auth_key} --accept-routes
 sleep 30
-mysql -u root -e "SET GLOBAL server_id=2;"
-mysql -u root -e "CHANGE MASTER TO MASTER_HOST='${var.onprem_db_ip}', MASTER_USER='repl_user', MASTER_PASSWORD='${var.db_password}', MASTER_AUTO_POSITION=1; START SLAVE;"
+mysql -u root -p"${var.db_password}" -e "SET GLOBAL server_id=2;"
+mysql -u root -p"${var.db_password}" -e "CHANGE MASTER TO MASTER_HOST='${var.onprem_db_ip}', MASTER_USER='repl_user', MASTER_PASSWORD='${var.db_password}', MASTER_AUTO_POSITION=1; START REPLICA;"
 EOF
 
   root_block_device {
