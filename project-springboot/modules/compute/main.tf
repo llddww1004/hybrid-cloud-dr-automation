@@ -260,6 +260,8 @@ systemctl enable mysqld
 systemctl start mysqld
 sleep 10
 TEMP_PASS=$(grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}')
+mysql -u root -p"$TEMP_PASS" --connect-expired-password -e "SET GLOBAL validate_password.policy=LOW;"
+mysql -u root -p"$TEMP_PASS" --connect-expired-password -e "SET GLOBAL validate_password.length=4;"
 mysql -u root -p"$TEMP_PASS" --connect-expired-password -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${var.db_password}';"
 curl -fsSL https://tailscale.com/install.sh | sh
 echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf
