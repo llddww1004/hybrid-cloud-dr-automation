@@ -263,14 +263,7 @@ sysctl -p
 tailscale up --authkey=${var.tailscale_auth_key} --accept-routes
 sleep 30
 mysql -u root -e "SET GLOBAL server_id=2;"
-mysql -u root -e "
-CHANGE MASTER TO
-  MASTER_HOST='${var.onprem_db_ip}',
-  MASTER_USER='repl_user',
-  MASTER_PASSWORD='${var.db_password}',
-  MASTER_AUTO_POSITION=1;
-START SLAVE;
-"
+mysql -u root -e "CHANGE MASTER TO MASTER_HOST='${var.onprem_db_ip}', MASTER_USER='repl_user', MASTER_PASSWORD='${var.db_password}', MASTER_AUTO_POSITION=1; START SLAVE;"
 EOF
 
   root_block_device {
