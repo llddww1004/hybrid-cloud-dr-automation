@@ -266,8 +266,6 @@ gtid-mode=ON
 enforce-gtid-consistency=ON
 MYCNF
 
-systemctl restart mysqld
-sleep 10
 systemctl enable mysqld
 systemctl start mysqld
 sleep 10
