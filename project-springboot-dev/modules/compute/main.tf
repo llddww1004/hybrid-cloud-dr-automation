@@ -264,6 +264,7 @@ log-bin=mysql-bin
 binlog-format=ROW
 gtid-mode=ON
 enforce-gtid-consistency=ON
+log_slave_updates=ON
 MYCNF
 
 echo '!includedir /etc/my.cnf.d/' >> /etc/my.cnf
