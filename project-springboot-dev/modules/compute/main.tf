@@ -297,8 +297,11 @@ mysqldump -h ${var.onprem_db_ip} \
 mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
   -e "CALL mysql.rds_reset_external_master;"
 
-# DB EC2 자기 IP 가져오기
-DB_EC2_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+# DB EC2 자기 IP 가져오기 (IMDSv2 토큰 방식)
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+DB_EC2_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/local-ipv4)
 
 # RDS Slave 설정 (GTID auto position, 어제 수동 성공 버전)
 mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
