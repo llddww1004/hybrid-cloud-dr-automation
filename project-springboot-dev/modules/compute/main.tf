@@ -284,6 +284,28 @@ tailscale up --authkey=${var.tailscale_auth_key} --accept-routes
 sleep 30
 mysql -u root -p"${var.db_password}" -e "SET GLOBAL server_id=2;"
 mysql -u root -p"${var.db_password}" -e "CHANGE MASTER TO MASTER_HOST='${var.onprem_db_ip}', MASTER_USER='repl_user', MASTER_PASSWORD='${var.db_password}', MASTER_AUTO_POSITION=1; START REPLICA;"
+
+# 온프렘 → RDS 초기 데이터 dump
+mysqldump -h ${var.onprem_db_ip} \
+  -u repl_user -p"${var.db_password}" \
+  --single-transaction --set-gtid-purged=OFF \
+  appdb \
+  | mysql -h ${var.rds_endpoint} \
+  -u admin -p"${var.db_password}" appdb
+
+# RDS Slave 설정 (온프렘을 Master로)
+mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
+  -e "CALL mysql.rds_set_external_master(
+    '${var.onprem_db_ip}',
+    3306,
+    'repl_user',
+    '${var.db_password}',
+    '',
+    0
+  );"
+
+mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
+  -e "CALL mysql.rds_start_replication;"
 EOF
 
   root_block_device {
