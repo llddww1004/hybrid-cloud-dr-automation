@@ -176,7 +176,7 @@ frontend http_front
     default_backend onprem_back
 backend onprem_back
     balance roundrobin
-    option  httpchk GET /
+    option  httpchk GET /actuator/health
     server  onprem 100.79.94.82:8080 check
 HAPROXY
 systemctl enable haproxy
