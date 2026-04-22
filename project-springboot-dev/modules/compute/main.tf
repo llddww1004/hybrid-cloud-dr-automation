@@ -72,6 +72,21 @@ resource "aws_launch_template" "springboot" {
 
   vpc_security_group_ids = [var.springboot_sg_id]
 
+  iam_instance_profile {
+    name = aws_iam_instance_profile.springboot.name
+  }
+
+  user_data = base64encode(templatefile(
+    "${path.module}/templates/springboot_user_data.sh.tpl",
+    {
+      jar_url      = var.springboot_jar_url
+      github_token = var.github_token
+      db_url       = var.rds_endpoint
+      db_username  = var.db_username
+      db_password  = var.db_password
+    }
+  ))
+
   block_device_mappings {
     device_name = "/dev/xvda"
 
@@ -228,6 +243,7 @@ resource "aws_instance" "jenkins" {
   key_name                    = var.key_name
   vpc_security_group_ids      = [var.jenkins_sg_id]
   associate_public_ip_address = false
+  iam_instance_profile        = aws_iam_instance_profile.jenkins.name
 
   root_block_device {
     volume_size           = 30
