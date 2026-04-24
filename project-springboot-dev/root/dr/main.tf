@@ -122,7 +122,6 @@ module "compute" {
 
   db_password              = var.db_password
   db_username              = var.db_username
-  onprem_db_ip             = var.onprem_db_ip
   rds_endpoint             = module.database.rds_endpoint
   db_ec2_private_ip        = var.db_ec2_private_ip
 

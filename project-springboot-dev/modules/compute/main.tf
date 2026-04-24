@@ -328,93 +328,33 @@ sysctl -p
 tailscale up --authkey=${var.tailscale_auth_key} --accept-routes
 sleep 30
 
-%{~ if var.dr_mode == false ~}
 ############################
-# Phase 4: Replication 설정
-############################
-# Step 1: 온프렘 → DB EC2 초기 dump (GTID=ON으로 1062 Duplicate 에러 방지)
-# --set-gtid-purged=ON: dump에 SET GTID_PURGED 포함 → DB EC2가 이미 실행한 GTID로 인식
-# --source-data=2: dump에 binlog 위치 코멘트 포함 (참고용)
-mysqldump -h ${var.onprem_db_ip} \
-  -u repl_user -p"${var.db_password}" \
-  --single-transaction --source-data=2 --set-gtid-purged=ON \
-  --databases appdb \
-  | mysql -u root -p"${var.db_password}"
-
-# Step 2: 온프렘 → DB EC2 Replication 시작
-mysql -u root -p"${var.db_password}" -e "
-CHANGE MASTER TO
-  MASTER_HOST='${var.onprem_db_ip}',
-  MASTER_USER='repl_user',
-  MASTER_PASSWORD='${var.db_password}',
-  MASTER_AUTO_POSITION=1;
-START REPLICA;
-"
-
+# Replication 설정 — Jenkins Pipeline 담당 (Terraform 범위 외)
 # ============================================================
-# Step 3: DB EC2 → RDS 초기 dump + GTID Skip (Error 1236 방지)
-# ============================================================
-# 3-1. DB EC2의 현재 GTID 상태 캡처 (RDS에게 "여기까진 이미 처리됨"으로 알릴 값)
-GTID_EXECUTED=$(mysql -u root -p"${var.db_password}" -sN \
-  -e "SELECT @@GLOBAL.gtid_executed;" | tr -d '\n ')
-
-echo "[INFO] DB EC2 gtid_executed: $GTID_EXECUTED"
-
-# 3-2. DB EC2(localhost)에서 dump 생성 (GTID 정보 포함)
-mysqldump -u root -p"${var.db_password}" \
-  --single-transaction --source-data=2 --set-gtid-purged=ON \
-  --databases appdb > /tmp/rds_init.sql
-
-# 3-3. RDS admin은 SET @@GLOBAL.GTID_PURGED 실행 권한 없음 → 해당 라인 제거
-sed -i '/SET @@GLOBAL.GTID_PURGED/d' /tmp/rds_init.sql
-
-# 3-4. RDS에 dump 로드 (데이터만)
-mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" < /tmp/rds_init.sql
-
-# Step 4: RDS Slave 초기화
-mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
-  -e "CALL mysql.rds_reset_external_master;"
-
-# Step 5: DB EC2 IP 조회 (IMDSv2)
-TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
-  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-DB_EC2_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-  http://169.254.169.254/latest/meta-data/local-ipv4)
-
-# Step 6: RDS external master 설정 (auto_position)
-mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
-  -e "CALL mysql.rds_set_external_master_with_auto_position(
-    '$DB_EC2_IP',
-    3306,
-    'repl_user',
-    '${var.db_password}',
-    0,
-    0
-  );"
-
-# Step 7: DB EC2의 현재 GTID까지 "이미 실행됨"으로 표시 (1236 방지 핵심)
-# ⚠️ rds_skip_transaction_with_gtid 가 GTID SET(uuid:1-100)을 허용하지 않을 수 있음.
-#    실패 시 || echo 로 경고만 남기고 진행 (start_replication 은 시도).
-#    실패 시 수동 대응 필요:
-#      (1) SHOW SLAVE STATUS\G 확인 (Last_IO_Error 1236)
-#      (2) GTID SET 을 단일 GTID로 split 후 반복 호출
-#      (3) 또는 rds_set_master_auto_position(0) + MASTER_LOG_FILE/POS 지정
-if [ -n "$GTID_EXECUTED" ]; then
-  mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
-    -e "CALL mysql.rds_skip_transaction_with_gtid('$GTID_EXECUTED');" || \
-    echo "[WARN] rds_skip_transaction_with_gtid 실패 — GTID SET 지원 안 할 수 있음. 로그 확인 필요."
-fi
-
-# Step 8: RDS Replication 시작
-mysql -h ${var.rds_endpoint} -u admin -p"${var.db_password}" \
-  -e "CALL mysql.rds_start_replication;"
-%{~ else ~}
+# 이 Terraform 코드는 "Replication 가능한 MySQL 인프라" 까지만 프로비저닝합니다.
+# 실제 Replication 실행(dump, CHANGE MASTER, START SLAVE, RDS 프로시저 등)은
+# Jenkins 파이프라인이 담당합니다.
+#
+# Jenkins 파이프라인 책임:
+#   • setup-replication : 온프렘 → DB EC2 → RDS 초기 동기화
+#   • failover          : DB EC2 STOP SLAVE + RDS Master 승격
+#   • failback          : 역방향 동기화 후 정방향 재구성
+#
+# 역할 분리 원칙:
+#   - Terraform (인프라 엔지니어): 인프라 세팅만
+#     (MySQL 설치, GTID/binlog 활성, repl_user, Tailscale)
+#   - Jenkins (CI/CD 담당자): Replication 실행 + 운영
+#     (dump 생성/import, CHANGE MASTER, START REPLICA, RDS 프로시저)
+#
+# 현재 인프라 상태 (apply 완료 후 기대값):
+#   ✅ MySQL running + GTID/binlog ON + log_slave_updates
+#   ✅ repl_user 계정 준비됨 (REPLICATION SLAVE 권한)
+#   ✅ Tailscale 메시 연결 (Jenkins가 SSH+SQL 접속 가능)
+#   ❌ SHOW SLAVE STATUS = Empty (의도적 — Jenkins 셋업 대기)
+#   ❌ DB 데이터 없음 (의도적 — Jenkins setup-replication 에서 초기 dump)
 ############################
-# Phase 4: DR 모드 (Replication 설정 스킵)
-############################
-echo "[DR 모드] 온프렘 장애 상황 - Phase 4 Replication 설정 스킵"
-echo "[DR 모드] RDS가 Master로 승격된 상태 유지"
-%{~ endif ~}
+echo "[INFO] DB EC2 인프라 세팅 완료 (MySQL + GTID + repl_user + Tailscale)"
+echo "[INFO] Replication 실행은 Jenkins setup-replication 파이프라인에서 담당"
 EOF
 
   root_block_device {

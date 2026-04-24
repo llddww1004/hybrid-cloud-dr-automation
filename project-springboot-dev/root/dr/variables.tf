@@ -184,10 +184,8 @@ variable "db_ec2_subnet_cidr" {
   default     = "10.0.61.0/24"
 }
 
-variable "onprem_db_ip" {
-  description = "온프렘 DB Tailscale IP"
-  type        = string
-}
+# Replication 관련 변수(onprem_db_ip 등)는 Jenkins 파이프라인에서 관리하므로
+# Terraform 코드에서 제거됨. (역할 분리: Terraform=인프라, Jenkins=Replication)
 
 variable "db_ec2_private_ip" {
   description = "DB EC2 고정 프라이빗 IP"

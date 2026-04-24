@@ -189,11 +189,6 @@ variable "db_password" {
   sensitive   = true
 }
 
-variable "onprem_db_ip" {
-  description = "온프렘 DB Tailscale IP"
-  type        = string
-}
-
 variable "rds_endpoint" {
   description = "RDS 엔드포인트"
   type        = string
