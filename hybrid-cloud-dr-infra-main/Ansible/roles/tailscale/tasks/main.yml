@@ -1,0 +1,72 @@
+---
+# ===========================================================
+# Tailscale 설치 및 설정 (AWS ↔ On-Premise 네트워킹)
+# ===========================================================
+
+- name: Install Tailscale
+  ansible.builtin.shell: |
+    curl -fsSL https://tailscale.com/install.sh | sh
+  args:
+    creates: /usr/bin/tailscale
+
+- name: Start and enable tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: started
+    enabled: true
+
+- name: Authenticate and connect to Tailscale network
+  # ===========================================================
+  # tailscale_advertise_routes 변수가 설정된 호스트 (예: HAProxy)는
+  # subnet router 역할로 --advertise-routes 플래그 포함하여 실행.
+  # 미설정 호스트는 단순 Tailscale 클라이언트로만 동작.
+  #
+  # 이 플래그를 빠뜨리면 기존에 수동 설정했던 subnet router 모드가
+  # 재실행 시 해제되어 네트워크 경로가 끊어짐 (Phase 3 재현 버그 이력).
+  # ===========================================================
+  ansible.builtin.shell: >
+    tailscale up
+    --authkey={{ tailscale_authkey }}
+    --accept-routes
+    {% if (tailscale_advertise_routes | default('')) | length > 0 %}--advertise-routes={{ tailscale_advertise_routes }}{% endif %}
+  register: tailscale_up
+  changed_when: "'Success' in tailscale_up.stdout or tailscale_up.rc == 0"
+  when: tailscale_authkey is defined and tailscale_authkey | length > 0
+
+- name: Enable IP forwarding for Tailscale routing
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - net.ipv4.ip_forward
+    - net.ipv6.conf.all.forwarding
+
+- name: Add tailscale0 interface to firewalld trusted zone (subnet router 전용)
+  # ===========================================================
+  # subnet router 호스트에서 firewalld가 tailscale0 forwarding
+  # 트래픽을 차단하는 문제를 방지.
+  #
+  # 문제 배경:
+  #   - Tailscale의 `tailscale up --advertise-routes=...`는 iptables FORWARD 체인에
+  #     `ts-forward` 룰을 추가하지만, firewalld의 zone 기반 필터링과 충돌 가능
+  #   - 결과: Jenkins → HAProxy → LAN VM 으로의 SSH 포워딩이
+  #     "No route to host" 또는 "kex_exchange_identification: Connection closed"
+  #     로 실패 (2026-04-24 재현 버그)
+  #
+  # 해결:
+  #   - tailscale0 을 firewalld의 `trusted` zone 에 등록하면
+  #     해당 인터페이스 트래픽은 firewalld 필터링에서 완전히 제외됨
+  #   - Tailscale 공식 문서의 권장 설정
+  #
+  # 조건: tailscale_advertise_routes 변수가 설정된 호스트만 (= subnet router 역할)
+  # ===========================================================
+  ansible.posix.firewalld:
+    zone: trusted
+    interface: tailscale0
+    permanent: true
+    immediate: true
+    state: enabled
+  when: (tailscale_advertise_routes | default('')) | length > 0
