@@ -1,7 +1,0 @@
----
-# WEB/WAS 서버만 개별 프로비저닝
-- name: Configure WEB/WAS server
-  hosts: webwas
-  roles:
-    - common
-    - springboot
